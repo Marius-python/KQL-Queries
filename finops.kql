@@ -1,0 +1,113 @@
+Getting appservice plans with diffrent SKU:
+Specifiy SKU: | where skuDetails contains "P0V3"
+
+Resources
+| where type == 'microsoft.web/serverfarms'
+| extend SKU = sku.name
+| project name, SKU
+
+Resources
+| where type == 'microsoft.web/serverfarms'
+| extend SKU = sku.name
+| project name, SKU, kind
+
+Resources
+| where type == 'microsoft.web/serverfarms'
+| where osType = kind contains 'Windows'
+| extend SKU = sku.name
+| project name, SKU, kind
+
+// App instances P0v3, linux
+resources
+| where type == "microsoft.web/serverfarms"
+| where osType = kind contains 'Linux'
+| where sku.tier == "Premium0V3"
+| extend instanceCount = toint(properties.currentNumberOfWorkers)
+| summarize totalInstances = sum(instanceCount)
+
+// App instances P1v3, linux
+resources
+| where type == "microsoft.web/serverfarms"
+| where kind contains 'linux'
+| where sku.name == "P1v3"
+| extend instanceCount = toint(properties.currentNumberOfWorkers)
+| summarize totalInstances = sum(instanceCount)
+
+// App instances P0v3, Windows
+resources
+| where type == "microsoft.web/serverfarms"
+| where osType = kind contains 'Windows'
+| where sku.tier == "Premium0V3"
+| extend instanceCount = toint(properties.currentNumberOfWorkers)
+| summarize totalInstances = sum(instanceCount)
+
+
+// App Service Plan without apps
+resources
+| where ['type'] =~ 'Microsoft.Web/serverfarms'
+| where properties['numberOfSites'] == 0
+| where sku['tier'] in ('PremiumV3', 'PremiumV2', 'Premium', 'IsolatedV2', 'Isolated', 'Standard', 'Basic', 'Dynamic')
+| project subscriptionId, id
+
+// App Service Plan without apps
+resources
+| where ['type'] =~ 'Microsoft.Web/serverfarms'
+| where properties['numberOfSites'] == 0
+| where sku['tier'] in ('Premium4', 'PremiumV3', 'PremiumV2', 'Premium', 'IsolatedV2', 'Isolated', 'Standard', 'Basic', 'Dynamic')
+| project PlanName = name, tier = sku['tier']
+
+// Stopped VMs
+resources
+| where type == "microsoft.compute/virtualmachines"
+| extend Powerstate=properties.extended.instanceView.powerState
+| where Powerstate.code contains "stopped"
+| project name,location,resourceGroup,subscriptionId,PowerStatus=Powerstate.displayStatus
+
+// Stopped or Deallocated
+resources
+| where type == "microsoft.compute/virtualmachines"
+| extend powerState = properties.extended.instanceView.powerState.code
+| where powerState contains "stopped" or powerState contains "deallocated"
+| project name, location, resourceGroup, subscriptionId, PowerStatus = properties.extended.instanceView.powerState.displayStatus
+
+NSG:
+resources
+| where type =~ 'microsoft.network/networksecuritygroups'
+| where isnull(properties.networkinterfaces) and isnull(properties.subnets)
+| project name, resourceGroup
+| sort by name asc
+
+
+DISK, unattached:
+resources
+| where type == 'microsoft.compute/disks'
+| where isempty(properties.diskState) or properties.diskState == 'Unattached'
+| project name, location, resourceGroup, sku.name, properties.diskSizeGB
+
+DISK, unattached-2:
+resources 
+| where type =~ 'microsoft.compute/disks' and managedBy == ''
+| extend diskState = tostring(properties.diskState)| where managedBy == '' and diskState != 'ActiveSAS'or diskState == 'Unattached' and diskState != 'ActiveSAS'  and tags !contains 'ASR-ReplicaDisk' and tags !contains 'asrseeddisk'
+| project  subscriptionId,id
+
+
+Public IP:
+resources
+| where type == 'microsoft.network/publicipaddresses'
+| where isnull(properties.ipConfiguration) and isnull(properties.ipTags)
+| project name, location, resourceGroup, properties.ipAddress
+
+Public IP, Null or empty
+resources
+| where type == "microsoft.network/publicipaddresses"
+| extend ipConfig = properties.ipConfiguration
+| extend ipConfigId = tostring(ipConfig.id)
+| extend reason = case(isnull(ipConfig), "NULL",isempty(ipConfigId), "EMPTY_OBJECT","OTHER")
+| project name, location, resourceGroup, ipAddress = properties.ipAddress, ipConfig, ipConfigId, reason
+
+// VM Disk Snapshot older than two months
+
+resources
+| where type == "microsoft.compute/snapshots"
+| where properties.timeCreated <= ago(60d)
+| project name,location,resourceGroup,subscriptionId,DiskSizeGB=properties.diskSizeGB,SKU=sku.name,TimeCreated=properties.timeCreated
